@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoModel, AutoTokenizer, DynamicCache
+from transformers import AutoModel, AutoTokenizer, DynamicCache, Cache
 from dataclasses import dataclass
 from typing import List, Dict, Any, Callable
 
@@ -22,65 +22,57 @@ def _sample_top_p(probs: torch.Tensor, p: float):
     next_token = torch.gather(probs_idx, -1, next_token)
     return next_token
 
-
-@dataclass
-class WIMOptions:
-
-    segment_size: int = 4096
-
-
 class WIMInference:
 
     def __init__(
-        self, model, tokenizer, classifier_callback: Callable, options: WIMOptions
+        self, model, tokenizer
     ) -> None:
         self.model = model
         self.tokenizer = tokenizer
-        self.classifier_callback = classifier_callback
-        self.options = options
-        self.kv_cache = DynamicCache()
+        self.wim_kv_cache = DynamicCache()
+        self.classifier_kv_cache = DynamicCache()
 
     def _prefill_tokens(
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
         cache_positions: torch.Tensor,
+        kv_cache: Cache,
     ):
-        outputs = self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            cache_position=cache_positions,
-            use_cache=True,
-            past_key_values=self.kv_cache,
-        )
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                cache_position=cache_positions,
+                use_cache=True,
+                past_key_values=kv_cache,
+            )
         return outputs
 
-    def shrink_kv_cache(self, new_seq_length: int):
+    def shrink_kv_cache(self, new_seq_length: int, kv_cache: Cache):
 
         def resize_tensor_list(token_list, new_seq_length):
             for layer_idx in range(len(token_list)):
                 token_list[layer_idx] = token_list[layer_idx][:, :, :new_seq_length, :]
 
-        resize_tensor_list(self.kv_cache.key_cache, new_seq_length)
-        resize_tensor_list(self.kv_cache.value_cache, new_seq_length)
-        self.kv_cache._seen_tokens = new_seq_length
+        resize_tensor_list(kv_cache.key_cache, new_seq_length)
+        resize_tensor_list(kv_cache.value_cache, new_seq_length)
+        kv_cache._seen_tokens = new_seq_length
 
-    def get_num_prefilled_tokens(self):
-        return self.kv_cache.get_seq_length()
-
-    def generate_text(
+    def generate_text_with_kv_cache(
         self,
         max_new_tokens: int,
         previous_logits: torch.Tensor,
         do_sample: bool,
         top_p: float,
         temperature: float,
-        early_stopping: bool,
+        early_stopping: bool,    
+        kv_cache: Cache,
     ) -> str:
         # Generate the answer
         generated_tokens = []
 
-        next_token_pos = self.kv_cache.get_seq_length()
+        next_token_pos = kv_cache.get_seq_length()
 
         # Use the logits from the prefilling to generate the first token
         logits = previous_logits
@@ -116,16 +108,16 @@ class WIMInference:
                 [next_token_pos], device=next_token.device
             )
 
-            # Get the model outputs
-            outputs = self.model(
-                input_ids=generation_input_ids,
-                attention_mask=generation_attention_mask,
-                cache_position=generation_cache_position,
-                use_cache=True,
-                past_key_values=kv_cache,
-            )
+            with torch.no_grad():
+                # Get the model outputs
+                outputs = self.model(
+                    input_ids=generation_input_ids,
+                    attention_mask=generation_attention_mask,
+                    cache_position=generation_cache_position,
+                    use_cache=True,
+                    past_key_values=kv_cache,
+                )
             logits = outputs.logits
-            kv_cache = outputs.past_key_values
             next_token_pos += 1
 
         generated_tokens = torch.cat(generated_tokens, dim=-1)
@@ -133,7 +125,7 @@ class WIMInference:
         decoded = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
         return decoded
 
-    def prefill_text(self, text: str):
+    def prefill_text_with_kv_cache(self, text: str, kv_cache: Cache):
         # Tokenize the text
         inputs = self.tokenizer(text, return_tensors="pt")
         input_ids = inputs["input_ids"].to(self.model.device)
@@ -141,8 +133,8 @@ class WIMInference:
         attention_mask = inputs["attention_mask"].to(self.model.device)
 
         # If we have a KV-Cache, we need to extend the attention mask to account for tokens already in the KV-Cache
-        if self.kv_cache.get_seq_length() > 0:
-            kv_cache_seq_len = self.kv_cache.get_seq_length()
+        if kv_cache.get_seq_length() > 0:
+            kv_cache_seq_len = kv_cache.get_seq_length()
             attention_mask = torch.cat(
                 [
                     torch.ones(
@@ -158,7 +150,7 @@ class WIMInference:
 
         # Generate the cache positions for the tokens to be prefilled
         cache_positions = torch.arange(
-            self.kv_cache.get_seq_length(), self.kv_cache.get_seq_length() + seq_len
+            kv_cache.get_seq_length(), kv_cache.get_seq_length() + seq_len
         ).to(self.model.device)
-        outputs = self._prefill_tokens(input_ids, attention_mask, cache_positions)
-        return self.kv_cache.get_seq_length(), outputs
+        outputs = self._prefill_tokens(input_ids, attention_mask, cache_positions, kv_cache)
+        return kv_cache.get_seq_length(), outputs
