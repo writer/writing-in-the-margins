@@ -1,15 +1,15 @@
 #!/bin/bash
 
-USER_HEADER="<|start_header_id|>user<|end_header_id|>"
-GENERATION_HEADER="<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
+USER_HEADER="<|user|>\n"
+GENERATION_HEADER="<|end|>\n<|assistant|>\n"
 
-python run.py --model_id "meta-llama/Meta-Llama-3-8B-Instruct" \
-    --attn_implementation "sdpa" \
-    --input_file "babilong_4k.json" \
+python run.py --model_id "microsoft/Phi-3-medium-128k-instruct" \
+    --attn_implementation "flash_attention_2" \
+    --input_file "babilong_16k.json" \
     --user_header "$USER_HEADER" \
     --generation_header "$GENERATION_HEADER" \
     --dtype "bfloat16" \
-    --min_tokens_segment "512" \
+    --min_tokens_segment "2048" \
     --max_new_tokens_extractive_summary "100" \
     --max_new_tokens_final_answer "50" \
     --max_new_tokens_classification "10" \

@@ -187,4 +187,5 @@ def main(
         
 
 if __name__ == "__main__":
-    fire.Fire(main)
+    with torch.no_grad():
+        fire.Fire(main)
