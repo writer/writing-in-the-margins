@@ -69,9 +69,9 @@ class WIMInference:
         early_stopping: bool,    
         kv_cache: Cache,
     ) -> str:
-        # Generate the answer
         generated_tokens = []
 
+        # This is needed to create the cache_position tensor
         next_token_pos = kv_cache.get_seq_length()
 
         # Use the logits from the prefilling to generate the first token
