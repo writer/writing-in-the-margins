@@ -1,0 +1,18 @@
+{user_header}
+I asked an LLM assistant whether a piece of document is related to the query: "{query}". This is its answer: 
+```text
+{answer}
+```
+Should I save it for later? 
+Here are rules:
+- Answer YES if the answer contains information about the query. 
+- Answer NO if the answer says the piece isn't related to the query.
+
+Provide the answer in the format: <YES/NO>#<Explanation>. 
+Here is are example answers:
+
+YES#Yes, the information contains an excerpt from a book that is related to the question.
+NO#No, the LLM assistant concluded the information isn't relevant.
+
+Don't add any other comments, all your remarks should be included in the "Explanation" section.
+{generation_header}

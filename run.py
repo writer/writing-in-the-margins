@@ -6,24 +6,10 @@ from nltk import sent_tokenize
 import tiktoken
 from wim import WIMInference
 from rich import print
+import json
 
-classify_prompt = """I asked an LLM assistant whether a piece of document is related to the query: \"{query}\". This is its answer: 
-```text
-{answer}
-```
-Should I save it for later? 
-Here are rules:
-- Answer YES if the answer contains information about the query. 
-- Answer NO if the answer says the piece isn't related to the query.
-
-Provide the answer in the format: <YES/NO>#<Explanation>. 
-Here is are example answers:
-
-YES#Yes, the information contains an excerpt from a book that is related to the question.
-NO#No, the LLM assistant concluded the information isn't relevant.
-
-Don't add any other comments, all your remarks should be included in the "Explanation" section.
-"""
+TEMPLATES_FOLDER = "templates"
+EXAMPLES_FOLDER = "examples"
 
 def parse_classifier_output(output: str) -> bool:
     output = output.replace("```", "").strip()
@@ -32,6 +18,11 @@ def parse_classifier_output(output: str) -> bool:
         return True
     else:
         return False
+
+def apply_special_tokens(text: str, special_tokens: dict) -> str:
+    for token, replacement in special_tokens.items():
+        text = text.replace(token, replacement)
+    return text
 
 def read_from_file(base_folder, file_path):
     with open(os.path.join(base_folder, file_path), "r") as file:
@@ -84,9 +75,11 @@ def load_model(model_id: str, attn_impl: str, dtype: str):
 
 
 def main(
-    model_id: str = "meta-llama/Meta-Llama-3-8B-Instruct",
-    attn_implementation: str = "sdpa",
-    base_folder: str = "",
+    model_id: str = None,
+    attn_implementation: str = None,
+    input_file: str = None,
+    user_header: str = None,
+    generation_header: str = None,
     dtype: str = "bfloat16",
     min_tokens_segment: int = 4096,
     max_new_tokens_extractive_summary: int = 100,
@@ -107,16 +100,28 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = load_model(model_id, attn_implementation, dtype)
 
-    # Load the prompts and the contexr
-    prompt_context = read_from_file(base_folder, "context.txt")
-    prompt_question_for_final_answer = read_from_file(base_folder, "question_for_final_answer.txt")
-    prompt_question_for_classifier = read_from_file(base_folder, "question_for_classifier.txt")
-    prompt_extractive_summary = read_from_file(base_folder, "extractive_summary.txt")
-    prompt_system_message = read_from_file(base_folder, "system_message.txt")
-    prompt_margins = read_from_file(base_folder, "margins.txt")
-    target = read_from_file(base_folder, "target.txt")
+    # Load the prompt templates
+    template_extractive_summary = read_from_file(TEMPLATES_FOLDER, "extractive_summary.txt")
+    template_classification = read_from_file(TEMPLATES_FOLDER, "classification.txt")
+    template_system_message = read_from_file(TEMPLATES_FOLDER, "system_message.txt")
+    template_final_answer = read_from_file(TEMPLATES_FOLDER, "final_answer.txt")
 
-    segments = chunk_text_to_segments(prompt_context, min_tokens_segment=min_tokens_segment)
+    # Load the example
+    example = json.loads(read_from_file(EXAMPLES_FOLDER, input_file))
+
+    special_tokens = {
+        "{user_header}": user_header,
+        "{generation_header}": generation_header,
+        "{query}": example["query"],
+    }
+
+    # Apply special tokens specific to the chosen model
+    prompt_extractive_summary = apply_special_tokens(template_extractive_summary, special_tokens)
+    prompt_classification = apply_special_tokens(template_classification, special_tokens)
+    prompt_final_answer = apply_special_tokens(template_final_answer, special_tokens)
+    prompt_system_message = apply_special_tokens(template_system_message, special_tokens)
+
+    segments = chunk_text_to_segments(example["context"], min_tokens_segment=min_tokens_segment)
     print(f"Number of segments in the context: {len(segments)}")
 
     # Prepend the system message to the first segment
@@ -144,7 +149,7 @@ def main(
             wim.shrink_kv_cache(prefilled_tokens_before_extractive_summary, wim.wim_kv_cache)
 
             # Now we can classify the margin using the model
-            classification_input = classify_prompt.format(query=prompt_question_for_classifier, answer=margin)
+            classification_input = prompt_classification.format(answer=margin)
             _, classification_prompt_logits = wim.prefill_text_with_kv_cache(classification_input, wim.classifier_kv_cache)
             classification_output = wim.generate_text_with_kv_cache(max_new_tokens_classification, classification_prompt_logits["logits"], do_sample, top_p, temperature, early_stopping, wim.classifier_kv_cache)
             classification_result = parse_classifier_output(classification_output)
@@ -163,21 +168,20 @@ def main(
                     "classification_output": classification_output.strip(),
                     "classification_result": classification_result,
                 })
-        
-        if len(positive_margins) > 0:
-            # Prefill all the margins
-            concatenated_margins = "".join(positive_margins)
-            wim.prefill_text_with_kv_cache(prompt_margins.format(concatenated_margins), wim.wim_kv_cache)
+
+        # Prefill the concatenated margins and the prompt to ask the final answer
+        concatenated_margins = "".join(positive_margins)
+        prompt_final_answer = prompt_final_answer.format(margins=concatenated_margins)
+
+        # Prefill the prompt for the final answer
+        _, final_answer_prefill_outputs = wim.prefill_text_with_kv_cache(prompt_final_answer, wim.wim_kv_cache)
 
         # Generate the final answer
-        _, final_answer_outputs = wim.prefill_text_with_kv_cache(prompt_question_for_final_answer, wim.wim_kv_cache)
-
-        # Generate the final answer
-        final_answer = wim.generate_text_with_kv_cache(max_new_tokens_final_answer, final_answer_outputs["logits"], do_sample, top_p, temperature, early_stopping, wim.wim_kv_cache)
+        final_answer = wim.generate_text_with_kv_cache(max_new_tokens_final_answer, final_answer_prefill_outputs["logits"], do_sample, top_p, temperature, early_stopping, wim.wim_kv_cache)
 
         print({
             "final_answer": final_answer.strip(),
-            "target": target,
+            "target": example["target"],
         })
 
         

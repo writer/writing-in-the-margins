@@ -1,3 +1,0 @@
-</excerpt>
-
-Given the above context, extract all information relevant to the query: "Where is John?". If the context is not relevant to the query, answer "I don't know."<|eot_id|><|start_header_id|>assistant<|end_header_id|>

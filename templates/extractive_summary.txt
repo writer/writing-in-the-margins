@@ -1,0 +1,2 @@
+```
+Given the above context, extract all information relevant to the query: "{query}". If the context is not relevant to the query, answer "I don't know."{generation_header}

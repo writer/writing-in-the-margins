@@ -1,6 +1,0 @@
-</excerpt>
-
-Additionally, use the information below to answer the query given below. It is delimited by the following tags: <margins></margins>.
-<margins>
-{0}
-</margins>
