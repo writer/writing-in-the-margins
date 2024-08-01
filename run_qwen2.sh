@@ -1,7 +1,7 @@
 #!/bin/bash
 
-USER_HEADER="<|im_start|>user\n"
-GENERATION_HEADER="<|im_end|>\n<|im_start|>assistant\n'"
+USER_HEADER=$"<|im_start|>user\n"
+GENERATION_HEADER=$"<|im_end|>\n<|im_start|>assistant\n"
 
 python run.py --model_id "Qwen/Qwen2-7B-Instruct" \
     --attn_implementation "flash_attention_2" \

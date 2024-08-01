@@ -1,7 +1,7 @@
 #!/bin/bash
 
-USER_HEADER="<|user|>\n"
-GENERATION_HEADER="<|end|>\n<|assistant|>\n"
+USER_HEADER=$"<|user|>\n"
+GENERATION_HEADER=$"<|end|>\n<|assistant|>\n"
 
 python run.py --model_id "microsoft/Phi-3-medium-128k-instruct" \
     --attn_implementation "flash_attention_2" \

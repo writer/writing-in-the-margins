@@ -1,7 +1,7 @@
 #!/bin/bash
 
-USER_HEADER="<|start_header_id|>user<|end_header_id|>\n\n"
-GENERATION_HEADER="<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+USER_HEADER=$"<|start_header_id|>user<|end_header_id|>\n\n"
+GENERATION_HEADER=$"<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
 python run.py --model_id "meta-llama/Meta-Llama-3.1-8B-Instruct" \
     --attn_implementation "flash_attention_2" \
