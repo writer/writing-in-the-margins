@@ -150,7 +150,12 @@ def main(
     with torch.no_grad():
         for segment_index in range(len(segments)):
             # Prefill the next segment
-            # Save how many tokens have been prefilled, without considering the tokens added by the question and the generated answer
+            # Save how many tokens have been prefilled so far, without considering the tokens added by the question and the generated answer
+            # At this point the KV-Cache contains the following:
+            # - The system message
+            # - Segment 0
+            # - Segment 1
+            # - ...
             segment = segments[segment_index]
             (
                 prefilled_tokens_before_extractive_summary,
@@ -159,11 +164,24 @@ def main(
             ) = wim.prefill_text_with_kv_cache(segment, wim.wim_kv_cache)
 
             # Prefill the extractive summary prompt
+            # At this point the KV-Cache contains the following:
+            # - The system message
+            # - Segment 0
+            # - Segment 1
+            # - ...
+            # - The extractive summary prompt
             _, _, extractive_summary_outputs = wim.prefill_text_with_kv_cache(
                 prompt_extractive_summary, wim.wim_kv_cache
             )
 
             # Generate the margin
+            # At this point the KV-Cache contains the following:
+            # - The system message
+            # - Segment 0
+            # - Segment 1
+            # - ...
+            # - The extractive summary prompt
+            # - The generated margin
             margin = wim.generate_text_with_kv_cache(
                 max_new_tokens=max_new_tokens_extractive_summary,
                 previous_logits=extractive_summary_outputs["logits"],
@@ -175,12 +193,18 @@ def main(
             )
 
             # We need to remove all the tokens added by the extractive summary and the generated margin
+            # After this operation the KV-Cache will contain the following:
+            # - The system message
+            # - Segment 0
+            # - Segment 1
+            # - ...
             wim.shrink_kv_cache_from_end(
                 new_size=prefilled_tokens_before_extractive_summary,
                 kv_cache=wim.wim_kv_cache,
             )
 
-            # Now we can classify the margin using the model
+            # Now we can classify the margin using the model.
+            # We use a separate KV-Cache for this operation, which is cleared after each classification
             classification_input = prompt_classification.format(answer=margin)
             _, _, classification_prompt_logits = wim.prefill_text_with_kv_cache(
                 classification_input, wim.classifier_kv_cache
@@ -220,6 +244,12 @@ def main(
         prompt_final_answer = prompt_final_answer.format(margins=concatenated_margins)
 
         # Prefill the prompt for the final answer
+        # At this point the KV-Cache contains the following:
+        # - The system message
+        # - Segment 0
+        # - Segment 1
+        # - ...
+        # - The concatenated margins + the prompt for the final answer
         _, _, final_answer_prefill_outputs = wim.prefill_text_with_kv_cache(
             prompt_final_answer, wim.wim_kv_cache
         )
