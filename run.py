@@ -141,6 +141,9 @@ def main(
     # Create the WIM instance
     wim = WIMInference(model, tokenizer)
 
+    # Prefill the system message (it can also be concatenated with the first segment)
+    # At this point the KV-Cache contains the following:
+    # - The system message
     _, _, _ = wim.prefill_text_with_kv_cache(
         prompt_system_message, wim.wim_kv_cache
     )
