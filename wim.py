@@ -49,15 +49,15 @@ class WIMInference:
             )
         return outputs
 
-    def shrink_kv_cache(self, new_seq_length: int, kv_cache: Cache):
+    def shrink_kv_cache_from_end(self, new_size: int, kv_cache: Cache):
 
-        def resize_tensor_list(token_list, new_seq_length):
+        def resize_tensor_list(token_list):
             for layer_idx in range(len(token_list)):
-                token_list[layer_idx] = token_list[layer_idx][:, :, :new_seq_length, :]
+                token_list[layer_idx] = token_list[layer_idx][:, :, :new_size, :]
 
-        resize_tensor_list(kv_cache.key_cache, new_seq_length)
-        resize_tensor_list(kv_cache.value_cache, new_seq_length)
-        kv_cache._seen_tokens = new_seq_length
+        resize_tensor_list(kv_cache.key_cache)
+        resize_tensor_list(kv_cache.value_cache)
+        kv_cache._seen_tokens = new_size
 
     def generate_text_with_kv_cache(
         self,
@@ -153,4 +153,4 @@ class WIMInference:
             kv_cache.get_seq_length(), kv_cache.get_seq_length() + seq_len
         ).to(self.model.device)
         outputs = self._prefill_tokens(input_ids, attention_mask, cache_positions, kv_cache)
-        return kv_cache.get_seq_length(), outputs
+        return kv_cache.get_seq_length(), seq_len, outputs
