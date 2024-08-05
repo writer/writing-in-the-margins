@@ -21,7 +21,7 @@ The paper is on Arxiv.
 
 ### Run the examples
 
-There are three examples for LLaMA 3.1, Phi3 and QWEN2. They can easily be run using one of the scripts, e.g. `./run_qern2.sh`.
+There are three examples for LLaMA 3.1, Phi3 and Qwen2. They can easily be run using one of the scripts, e.g. `./run_qwen2.sh`.
 
 ### How does it work
 
@@ -37,6 +37,8 @@ The logic is in the `run.py` file and it resembles the pseudocode in the paper. 
     1. Classify the margin using the same model or an auxiliary model. The classification of a margin can be overlapped with the prefilling of the context into the KV-Cache as described in the Appendix A of the paper. We do not provide an implementation of it. The prompt used to classify a margin is in `templates/classification.txt`
 1. Add all the margins that are classified as relevant to the KV-Cache and ask the question (`templates/final_answer.txt`)
 1. Generate the answer using the context, the relevant margins and the question.
+
+Depending on the language model used, it may be necessary to format the input using the chat tags supported by the model. For that reason, in each script, we define the headers used by each language model which are then replaced in the prompt templates before being sent to the model.
 
 All the steps are done sequentially, so the progress can be displayed to the user, along with the generated margins, to provide a visual feedback that allows early-exit (early stop of the inference).
 
