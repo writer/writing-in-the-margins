@@ -1,10 +1,12 @@
 # Writing in the Margins
 
-<img src="./writing_in_the_margins_logo.png" width="500"/>
+<p align="center">
+    <img src="./WiM.png" width="700"/>
+</p>
 
 ## Paper
 
-The paper is on Arxiv.
+[Writing in the Margins: Better Inference Pattern for Long Context Retrieval](https://arxiv.org/abs/2408.14906)
 
 ## Introduction
 
@@ -46,3 +48,18 @@ All the steps are done sequentially, so the progress can be displayed to the use
 
 The logic for prefilling and shrinking the KV-Cache is in the `wim.py` file, while the WiM algorithm as shown in the paper is implemented in `run.py`.
 
+## Citing
+
+If you use WiM in your research, please cite with the following BibText
+
+```bibtext
+@misc{russak2024writingmarginsbetterinference,
+      title={Writing in the Margins: Better Inference Pattern for Long Context Retrieval}, 
+      author={Melisa Russak and Umar Jamil and Christopher Bryant and Kiran Kamble and Axel Magnuson and Mateusz Russak and Waseem AlShikh},
+      year={2024},
+      eprint={2408.14906},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2408.14906}, 
+}
+```
